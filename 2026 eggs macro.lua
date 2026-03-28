@@ -1,4 +1,4 @@
--- MADE BY SHRIMPER :D
+-- MODIFIED BY SHRIMPER :D
 local Players            = game:GetService("Players")
 local PathfindingService = game:GetService("PathfindingService")
 
@@ -13,16 +13,14 @@ local PATH_PARAMS = {
     WaypointSpacing = shared.spacing or 2,
 }
 
--- Edit these settings if you want to.
 local REACH_DIST           = 4.5
-local WAYPOINT_TIMEOUT     = 2.5
+local WAYPOINT_TIMEOUT      = 2.5
 local STUCK_VEL_THRESHOLD  = 1.5
 local STUCK_CHECK_AFTER    = 0.8
 local JUMP_COOLDOWN        = 0.2
 local MAX_PATH_ATTEMPTS    = 3
 local WALK_HARD_TIMEOUT    = 90
 local GLOBAL_STUCK_TIMEOUT = 90
-local RESPAWN_TIMEOUT      = 8
 local QUEUE_COOLDOWN       = 0.2
 
 local EGG_COLORS = {
@@ -49,7 +47,6 @@ local isWalking    = false
 local eggQueue     = {}
 local queuedIds    = {}
 local lastMoveTick = tick()
-local lastPos      = Vector3.zero
 
 local function isAlive(inst)
     return inst ~= nil and inst.Parent ~= nil
@@ -63,36 +60,6 @@ end
 local function getChar()  return player.Character end
 local function getHum(c)  return c and c:FindFirstChildOfClass("Humanoid") end
 local function getRoot(c) return c and c:FindFirstChild("HumanoidRootPart") end
-
-local function killChar()
-    pcall(function()
-        local h = getHum(getChar())
-        if h then h.Health = 0 end
-    end)
-end
-
-local function awaitFreshChar(timeout)
-    timeout = timeout or RESPAWN_TIMEOUT
-    local c = getChar()
-    if c then
-        local h = getHum(c)
-        local r = getRoot(c)
-        if h and h.Health > 0 and r then return c, h, r end
-    end
-
-    local newChar
-    local conn = player.CharacterAdded:Connect(function(ch) newChar = ch end)
-    local deadline = tick() + timeout
-    while not newChar and tick() < deadline do task.wait(0.05) end
-    conn:Disconnect()
-
-    c = newChar or getChar()
-    if not c then return nil, nil, nil end
-    local h = c:WaitForChild("Humanoid",          RESPAWN_TIMEOUT)
-    local r = c:WaitForChild("HumanoidRootPart",  RESPAWN_TIMEOUT)
-    if not h or not r then return nil, nil, nil end
-    return c, h, r
-end
 
 local function resolvePos(inst)
     if not isAlive(inst) then return nil end
@@ -145,8 +112,8 @@ local function doJump(hum)
     end
 end
 
-local function stepToWaypoint(hum, root, wp, pathFolder)
-    if not hum or not root or hum.Health <= 0 then return "dead" end
+local function stepToWaypoint(hum, root, wp)
+    if not hum or not root then return "fail" end
 
     hum:MoveTo(wp.Position)
 
@@ -162,7 +129,6 @@ local function stepToWaypoint(hum, root, wp, pathFolder)
         task.wait()
 
         if not farmEnabled then result = "stopped" break end
-        if hum.Health <= 0 then result = "dead" break end
         if tick() - startT > WAYPOINT_TIMEOUT then result = "timeout" break end
 
         local dist = (root.Position - wp.Position).Magnitude
@@ -186,7 +152,10 @@ local function stepToWaypoint(hum, root, wp, pathFolder)
 end
 
 local function walkToEgg(targetInstance, eggColor)
-    local _, hum, root = awaitFreshChar()
+    local char = getChar()
+    local hum = getHum(char)
+    local root = getRoot(char)
+    
     if not hum or not root then return "fail" end
 
     for attempt = 1, MAX_PATH_ATTEMPTS do
@@ -208,7 +177,7 @@ local function walkToEgg(targetInstance, eggColor)
         local pathBroken = false
 
         for i, wp in ipairs(waypoints) do
-            if not farmEnabled or not isAlive(targetInstance) or hum.Health <= 0 then
+            if not farmEnabled or not isAlive(targetInstance) then
                 pathBroken = true
                 break
             end
@@ -224,11 +193,10 @@ local function walkToEgg(targetInstance, eggColor)
                 doJump(hum)
             end
 
-            local stepResult = stepToWaypoint(hum, root, wp, pathFolder)
+            local stepResult = stepToWaypoint(hum, root, wp)
 
             if stepResult ~= "reached" then
                 pathBroken = true
-                if stepResult == "timeout" or stepResult == "dead" then killChar() end
                 break
             end
         end
@@ -244,7 +212,6 @@ local function walkToEgg(targetInstance, eggColor)
         end
 
         task.wait(0.1)
-        killChar()
         return "done"
     end
     return "fail"
@@ -320,4 +287,4 @@ player.Chatted:Connect(function(msg)
 end)
 
 workspace.ChildAdded:Connect(checkEgg)
-print("[EggBot] Bot Loaded!")
+print("[EggBot] Bot Loaded - V1.5.0!")
