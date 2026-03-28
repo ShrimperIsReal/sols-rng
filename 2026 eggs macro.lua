@@ -44,7 +44,7 @@ local PRIORITY_SET = {
     hatch_egg          = true, royal_egg    = true, the_egg_of_the_sky = true,
 }
 
-local farmEnabled  = false
+local farmEnabled  = shared.toggled or false
 local isWalking    = false
 local eggQueue     = {}
 local queuedIds    = {}
