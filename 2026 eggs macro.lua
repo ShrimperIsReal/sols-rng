@@ -320,4 +320,4 @@ player.Chatted:Connect(function(msg)
 end)
 
 workspace.ChildAdded:Connect(checkEgg)
-print("[EggBot] Smooth Version Loaded.")
+print("[EggBot] Bot Loaded!")
