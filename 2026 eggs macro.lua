@@ -1,9 +1,21 @@
--- MODIFIED BY SHRIMPER :D
+-- MADE BY SHRIMPER :D
 local Players            = game:GetService("Players")
 local PathfindingService = game:GetService("PathfindingService")
 
 local player    = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
+
+--[[
+-- backup thing in case
+if not game.Workspace:FindFirstChild("Anti-Fall") then
+    local Part = Instance.new("Part", game.Workspace)
+    Part.Name = "Anti-Fall"
+    Part.Size = Vector3.new(2048, 1.2, 2048)
+    Part.Position = Vector3.new(178.24668884277344, 83.1500015258789, -346.3057556152344)
+    Part.Anchored = true
+end
+
+]]
 
 local PATH_PARAMS = {
     AgentHeight     = 1.5,
