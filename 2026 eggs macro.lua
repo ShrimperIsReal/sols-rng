@@ -528,12 +528,24 @@ function checkEgg(v)
         local isPriority = PRIORITY_SET[name] == true
         local isPotion   = string.find(name, "potion", 1, true) ~= nil
         local eggColor
- 
+
         if isPriority then eggColor = PRIORITY_COLOR
         elseif isPotion then eggColor = POTION_COLOR
         elseif eggNum then eggColor = EGG_COLORS[eggNum] or DEFAULT_COLOR
         else return end
- 
+
+        local hasPrompt = false
+        for _, d in ipairs(v:GetDescendants()) do
+            if d:IsA("ProximityPrompt") then
+                hasPrompt = true
+                break
+            end
+        end
+        if not hasPrompt then
+            warn("[EggBot] Skipping " .. name .. " – no ProximityPrompt found")
+            return
+        end
+
         queuedIds[uid] = true
         table.insert(eggQueue, isPriority and 1 or #eggQueue + 1, { target = v, color = eggColor, id = uid })
         if farmEnabled() then processQueue() end
@@ -555,4 +567,3 @@ end)
  
 workspace.ChildAdded:Connect(checkEgg)
 print("[EggBot] Bot Loaded - V1.7.1 (Stuck Reset)!")
- 
