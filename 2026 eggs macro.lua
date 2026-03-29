@@ -19,6 +19,24 @@ Slope1.Shape = Enum.PartType.Wedge
 Slope1.Anchored = true
 Slope1.Transparency = 0.5
 
+local Slope2 = Instance.new("Part", game.Workspace)
+Slope2.Name = "SlopeSoNoStuckyPoo2"
+Slope2.Size = Vector3.new(33, 20, 30)
+Slope2.Position = Vector3.new(-63, 85, -182)
+Slope2.Rotation = Vector3.new(0,0,0)
+Slope2.Shape = Enum.PartType.Wedge
+Slope2.Anchored = true
+Slope2.Transparency = 0.5
+
+local Slope3 = Instance.new("Part", game.Workspace)
+Slope3.Name = "SlopeSoNoStuckyPoo3"
+Slope3.Size = Vector3.new(20,20,19)
+Slope3.Position = Vector3.new(478.5477600097656, 102.00000762939453, -399.6143493652344)
+Slope3.Rotation = Vector3.new(0,90,0)
+Slope3.Shape = Enum.PartType.Wedge
+Slope3.Anchored = true
+Slope3.Transparency = 0.5
+
 local AntiSign1 = Instance.new("Part", game.Workspace)
 AntiSign1.Name = "Anti-Stuck1"
 AntiSign1.Anchored = true
@@ -51,6 +69,14 @@ AntiSign4.Position = Vector3.new(113.875, 100, -444)
 AntiSign4.Rotation = Vector3.new(0, -90, 0)
 AntiSign4.Transparency = 0.5
 
+local AntiSign5 = Instance.new("Part", game.Workspace)
+AntiSign5.Name = "Anti-Stuck5"
+AntiSign5.Anchored = true
+AntiSign5.Size = Vector3.new(80, 2, 8)
+AntiSign5.Position = Vector3.new(400, 91, -316.5)
+AntiSign5.Rotation = Vector3.new(0, 0, 0)
+AntiSign5.Transparency = 0.5
+
 local Players            = game:GetService("Players")
 local PathfindingService = game:GetService("PathfindingService")
 
@@ -65,7 +91,6 @@ local PATH_PARAMS = {
     WaypointSpacing = shared.spacing or 2,
 }
 
--- edit whatever yo want bruh
 local REACH_DIST           = 4.5
 local WAYPOINT_TIMEOUT      = 2.5
 local STUCK_VEL_THRESHOLD  = 1.5
@@ -75,7 +100,10 @@ local MAX_PATH_ATTEMPTS    = 5
 local WALK_HARD_TIMEOUT    = 90
 local GLOBAL_STUCK_TIMEOUT = 90
 local QUEUE_COOLDOWN       = 0.2
+
 local GAP_DEPTH_THRESHOLD  = 5
+local MAX_JUMPABLE_GAP     = 4
+local PARKOUR_JUMP_BOOST   = true
 
 local EGG_COLORS = {
     [1] = Color3.fromRGB(255, 255, 255),
@@ -140,9 +168,22 @@ local function isGapBelow(position)
     return result == nil
 end
 
-local function pathSegmentHasGap(fromPos, toPos)
-    local mid = (fromPos + toPos) / 2
-    return isGapBelow(toPos) or isGapBelow(mid)
+local function getGapInfo(fromPos, toPos)
+    local horizontalDist = Vector3.new(toPos.X - fromPos.X, 0, toPos.Z - fromPos.Z).Magnitude
+    local midPos = (fromPos + toPos) / 2
+
+    local toHasGap  = isGapBelow(toPos)
+    local midHasGap = isGapBelow(midPos)
+
+    if not toHasGap and not midHasGap then
+        return nil
+    end
+
+    if horizontalDist <= MAX_JUMPABLE_GAP then
+        return horizontalDist
+    end
+
+    return false
 end
 
 local function makePathFolder(waypoints, eggColor)
@@ -150,7 +191,7 @@ local function makePathFolder(waypoints, eggColor)
     folder.Name  = "ActivePath"
 
     pcall(function()
-        for _, wp in ipairs(waypoints) do
+        for i, wp in ipairs(waypoints) do
             local p      = Instance.new("Part")
             p.Shape      = Enum.PartType.Ball
             p.Size       = Vector3.new(0.6, 0.6, 0.6)
@@ -159,7 +200,9 @@ local function makePathFolder(waypoints, eggColor)
             p.CanCollide = false
             p.CastShadow = false
             p.Material   = Enum.Material.Neon
-            if isGapBelow(wp.Position) then
+            local prevPos = (i > 1) and waypoints[i-1].Position or wp.Position
+            local gapInfo = getGapInfo(prevPos, wp.Position)
+            if gapInfo then
                 p.Color = GAP_COLOR
             elseif wp.Action == Enum.PathWaypointAction.Jump then
                 p.Color = JUMP_COLOR
@@ -189,8 +232,52 @@ local function doJump(hum)
     end
 end
 
-local function stepToWaypoint(hum, root, wp)
+local function doGapJump(hum, root, targetPos)
+    if not hum or not root then return false end
+
+    local dir = (Vector3.new(targetPos.X, root.Position.Y, targetPos.Z) - root.Position).Unit
+
+    if PARKOUR_JUMP_BOOST then
+        local edgeApproach = root.Position + dir * 1.5
+        hum:MoveTo(edgeApproach)
+        task.wait(0.08)
+    end
+
+    doJump(hum)
+    hum:MoveTo(targetPos)
+
+    local t0 = tick()
+    local landed = false
+    while tick() - t0 < 2.5 do
+        task.wait()
+        local state = hum:GetState()
+        if state ~= Enum.HumanoidStateType.Jumping and state ~= Enum.HumanoidStateType.Freefall then
+            landed = true
+            break
+        end
+        hum:MoveTo(targetPos)
+    end
+
+    return landed
+end
+
+local function stepToWaypoint(hum, root, wp, prevPos)
     if not hum or not root then return "fail" end
+
+    local fromPos = prevPos or root.Position
+    local gapInfo = getGapInfo(fromPos, wp.Position)
+
+    if gapInfo == false then
+        return "gaptoowide"
+    elseif gapInfo then
+        local success = doGapJump(hum, root, wp.Position)
+        if success then
+            lastMoveTick = tick()
+            return "reached"
+        else
+            return "gapfail"
+        end
+    end
 
     hum:MoveTo(wp.Position)
 
@@ -225,21 +312,32 @@ local function stepToWaypoint(hum, root, wp)
             local moved = (root.Position - lastPos).Magnitude
 
             if moved < MIN_PROGRESS then
-                local awayDir = (root.Position - wp.Position).Unit
-                local ceilingRay = workspace:Raycast(
-                    root.Position,
-                    Vector3.new(0, 3.5, 0),
-                    RaycastParams.new()
-                )
-                if ceilingRay then
-                    local backTarget = root.Position + Vector3.new(awayDir.X * 3, 0, awayDir.Z * 3)
-                    hum:MoveTo(backTarget)
-                    task.wait(0.4)
-                    hum:MoveTo(wp.Position)
-                elseif (now - lastJumpTime) > JUMP_COOLDOWN then
-                    lastJumpTime = now
-                    doJump(hum)
-                    hum:MoveTo(wp.Position)
+                local lookAheadPos = root.Position + (wp.Position - root.Position).Unit * 3
+                local surpriseGap  = getGapInfo(root.Position, lookAheadPos)
+
+                if surpriseGap and surpriseGap ~= false then
+                    local success = doGapJump(hum, root, wp.Position)
+                    if success then
+                        result = "reached"
+                        break
+                    end
+                else
+                    local awayDir = (root.Position - wp.Position).Unit
+                    local ceilingRay = workspace:Raycast(
+                        root.Position,
+                        Vector3.new(0, 3.5, 0),
+                        RaycastParams.new()
+                    )
+                    if ceilingRay then
+                        local backTarget = root.Position + Vector3.new(awayDir.X * 3, 0, awayDir.Z * 3)
+                        hum:MoveTo(backTarget)
+                        task.wait(0.4)
+                        hum:MoveTo(wp.Position)
+                    elseif (now - lastJumpTime) > JUMP_COOLDOWN then
+                        lastJumpTime = now
+                        doJump(hum)
+                        hum:MoveTo(wp.Position)
+                    end
                 end
             end
 
@@ -269,6 +367,7 @@ local function respawnAndWait()
     end
     task.wait(0.3)
 end
+
 local function rescanWorkspace()
     for _, v in ipairs(workspace:GetChildren()) do
         checkEgg(v)
@@ -305,12 +404,8 @@ local function walkToEgg(targetInstance, eggColor)
                 pathBroken = true
                 break
             end
+
             local prevPos = (i > 1) and waypoints[i-1].Position or root.Position
-            if pathSegmentHasGap(prevPos, wp.Position) then
-                warn("[EggBot] Gap detected near waypoint " .. i .. " – abandoning path attempt " .. attempt)
-                pathBroken = true
-                break
-            end
 
             local needsJump = wp.Action == Enum.PathWaypointAction.Jump
             if not needsJump and i < #waypoints then
@@ -323,9 +418,17 @@ local function walkToEgg(targetInstance, eggColor)
                 doJump(hum)
             end
 
-            local stepResult = stepToWaypoint(hum, root, wp)
+            local stepResult = stepToWaypoint(hum, root, wp, prevPos)
 
-            if stepResult ~= "reached" then
+            if stepResult == "gaptoowide" then
+                warn("[EggBot] Gap too wide at waypoint " .. i .. " – abandoning attempt " .. attempt)
+                pathBroken = true
+                break
+            elseif stepResult == "gapfail" then
+                warn("[EggBot] Gap jump failed at waypoint " .. i .. " – retrying path")
+                pathBroken = true
+                break
+            elseif stepResult ~= "reached" then
                 pathBroken = true
                 break
             end
@@ -428,4 +531,4 @@ player.Chatted:Connect(function(msg)
 end)
 
 workspace.ChildAdded:Connect(checkEgg)
-print("[EggBot] Bot Loaded - V1.6.0!")
+print("[EggBot] Bot Loaded - V1.7.0 (Parkour)!")
