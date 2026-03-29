@@ -1,4 +1,56 @@
 -- MADE BY SHRIMPER :D
+
+if workspace:FindFirstChild("Slope1") then
+	task.spawn(function()
+		workspace:FindFirstChild("Slope1"):Destroy()
+		workspace:FindFirstChild("Anti-Stuck1"):Destroy()
+		workspace:FindFirstChild("Anti-Stuck2"):Destroy()
+		workspace:FindFirstChild("Anti-Stuck3"):Destroy()
+		workspace:FindFirstChild("Anti-Stuck4"):Destroy()
+	end)
+end
+
+local Slope1 = Instance.new("Part", game.Workspace)
+Slope1.Name = "SlopeSoNoStuckyPoo"
+Slope1.Size = Vector3.new(10,15,15)
+Slope1.Position = Vector3.new(448.75, 102.75, -406)
+Slope1.Rotation = Vector3.new(0,90,0)
+Slope1.Shape = Enum.PartType.Wedge
+Slope1.Anchored = true
+Slope1.Transparency = 0.5
+
+local AntiSign1 = Instance.new("Part", game.Workspace)
+AntiSign1.Name = "Anti-Stuck1"
+AntiSign1.Anchored = true
+AntiSign1.Size = Vector3.new(2, 34, 21)
+AntiSign1.Position = Vector3.new(321, 100, -390)
+AntiSign1.Rotation = Vector3.new(-90, 0, 180)
+AntiSign1.Transparency = 0.5
+
+local AntiSign2 = Instance.new("Part", game.Workspace)
+AntiSign2.Name = "Anti-Stuck2"
+AntiSign2.Anchored = true
+AntiSign2.Size = Vector3.new(25,40,5)
+AntiSign2.Position = Vector3.new(278.137, 106, -433.454)
+AntiSign2.Rotation = Vector3.new(0, -69.999, 0)
+AntiSign2.Transparency = 0.5
+
+local AntiSign3 = Instance.new("Part", game.Workspace)
+AntiSign3.Name = "Anti-Stuck3"
+AntiSign3.Anchored = true
+AntiSign3.Size = Vector3.new(25,40,5)
+AntiSign3.Position = Vector3.new(255.786, 106, -452.495)
+AntiSign3.Rotation = Vector3.new(0, -19.999, 0)
+AntiSign3.Transparency = 0.5
+
+local AntiSign4 = Instance.new("Part", game.Workspace)
+AntiSign4.Name = "Anti-Stuck4"
+AntiSign4.Anchored = true
+AntiSign4.Size = Vector3.new(40, 50, 8)
+AntiSign4.Position = Vector3.new(113.875, 100, -444)
+AntiSign4.Rotation = Vector3.new(0, -90, 0)
+AntiSign4.Transparency = 0.5
+
 local Players            = game:GetService("Players")
 local PathfindingService = game:GetService("PathfindingService")
 
