@@ -207,7 +207,7 @@ local function walkToEgg(targetInstance, eggColor)
 
         if isAlive(targetInstance) then
             for _, v in ipairs(targetInstance:GetDescendants()) do
-                if v:IsA("ProximityPrompt") then fireproximityprompt(v) end
+                if v:IsA("ProximityPrompt") then task.wait(0.5) fireproximityprompt(v) end
             end
         end
 
