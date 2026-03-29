@@ -117,9 +117,13 @@ local function stepToWaypoint(hum, root, wp)
 
     hum:MoveTo(wp.Position)
 
-    local result   = nil
-    local startT   = tick()
+    local result       = nil
+    local startT       = tick()
     local lastJumpTime = 0
+    local lastPos      = root.Position
+    local lastPosTime  = tick()
+    local PROGRESS_CHECK_INTERVAL = 0.6
+    local MIN_PROGRESS = 0.8 -- studs moved to count as "not stuck"
 
     local moveConn = hum.MoveToFinished:Connect(function(reached)
         if result == nil then result = reached and "reached" or "timeout" end
@@ -138,12 +142,37 @@ local function stepToWaypoint(hum, root, wp)
             break
         end
 
-        if (tick() - startT) > STUCK_CHECK_AFTER and (tick() - lastJumpTime) > JUMP_COOLDOWN then
-            if root.AssemblyLinearVelocity.Magnitude < STUCK_VEL_THRESHOLD then
-                lastJumpTime = tick()
-                doJump(hum)
-                hum:MoveTo(wp.Position)
+        local now = tick()
+
+        -- Check if we made meaningful progress since last check
+        if now - lastPosTime > PROGRESS_CHECK_INTERVAL then
+            local moved = (root.Position - lastPos).Magnitude
+
+            if moved < MIN_PROGRESS then
+                -- Truly stuck: back away from the wall then retry
+                local awayDir = (root.Position - wp.Position).Unit
+                -- Ceiling check: if there's something above, don't jump, back up instead
+                local ceilingRay = workspace:Raycast(
+                    root.Position,
+                    Vector3.new(0, 3.5, 0),
+                    RaycastParams.new()
+                )
+                if ceilingRay then
+                    -- There's a ceiling above: back up horizontally instead of jumping
+                    local backTarget = root.Position + Vector3.new(awayDir.X * 3, 0, awayDir.Z * 3)
+                    hum:MoveTo(backTarget)
+                    task.wait(0.4)
+                    hum:MoveTo(wp.Position)
+                elseif (now - lastJumpTime) > JUMP_COOLDOWN then
+                    -- No ceiling: normal jump-to-unstick
+                    lastJumpTime = now
+                    doJump(hum)
+                    hum:MoveTo(wp.Position)
+                end
             end
+
+            lastPos     = root.Position
+            lastPosTime = now
         end
     end
 
