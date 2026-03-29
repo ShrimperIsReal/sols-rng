@@ -1,52 +1,86 @@
 local NormalEggs = {
-    point_egg_ = { min = 1, max = 6 },
-    random_potion_egg_ = { min = 1, max = 2 },
+	point_egg_ = { min = 1, max = 6 },
+	random_potion_egg_ = { min = 1, max = 2 },
 }
 
 local SpecialEggs = {
-    "andromeda_egg", "angelic_egg", "dreamer_egg",
-    "hatch_egg", "egg_v2", "royal_egg",
-    "blooming_egg", "forest_egg", "the_egg_of_the_sky"
+	"andromeda_egg", "angelic_egg", "dreamer_egg",
+	"hatch_egg", "egg_v2", "royal_egg",
+	"blooming_egg", "forest_egg", "the_egg_of_the_sky"
 }
 
+local function Board(v)
+	local Converted = {
+		["_BillboardGui"] = Instance.new("BillboardGui");
+		["_TextLabel"] = Instance.new("TextLabel");
+		["_UIStroke"] = Instance.new("UIStroke");
+	}
+
+	Converted["_BillboardGui"].Active = true
+	Converted["_BillboardGui"].AlwaysOnTop = true
+	Converted["_BillboardGui"].ClipsDescendants = true
+	Converted["_BillboardGui"].LightInfluence = 1
+	Converted["_BillboardGui"].Size = UDim2.new(0, 200, 0, 50)
+	Converted["_BillboardGui"].ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+	Converted["_BillboardGui"].Parent = v
+
+	Converted["_TextLabel"].Font = Enum.Font.Unknown
+	Converted["_TextLabel"].Text = v.Name
+	Converted["_TextLabel"].TextColor3 = Color3.fromRGB(255, 255, 255)
+	Converted["_TextLabel"].TextScaled = true
+	Converted["_TextLabel"].TextSize = 14
+	Converted["_TextLabel"].TextWrapped = true
+	Converted["_TextLabel"].BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+	Converted["_TextLabel"].BackgroundTransparency = 1
+	Converted["_TextLabel"].BorderColor3 = Color3.fromRGB(0, 0, 0)
+	Converted["_TextLabel"].BorderSizePixel = 0
+	Converted["_TextLabel"].Size = UDim2.new(1, 0, 1, 0)
+	Converted["_TextLabel"].Parent = Converted["_BillboardGui"]
+
+	Converted["_UIStroke"].Thickness = 2
+	Converted["_UIStroke"].Parent = Converted["_TextLabel"]
+
+end
+
 local function highlightEgg(target)
-    if target:FindFirstChild("Highlight") then target.Highlight:Destroy() end
-    local highlight = Instance.new("Highlight", target)
-    highlight.FillColor = table.find(SpecialEggs, target.Name)
-        and Color3.fromRGB(255, 0, 255)
-        or Color3.fromRGB(0, 255, 255)
-    highlight.FillTransparency = 0.5
-    highlight.OutlineTransparency = 0.5
-    highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
-    if target:IsA("MeshPart") then
-        target.Size = Vector3.new(15, 15, 15)
-    elseif target:IsA("Model") then
-        local part = target:FindFirstChildWhichIsA("BasePart") or target:FindFirstChildWhichIsA("MeshPart")
-        if part then
-            part.Size = Vector3.new(15, 15, 15)
-        else
-            warn("what the fuck is this egg model bro, ts pmo")
-        end
-    end
+	if target:FindFirstChild("Highlight") then target.Highlight:Destroy() end
+	local highlight = Instance.new("Highlight", target)
+	highlight.FillColor = table.find(SpecialEggs, target.Name)
+		and Color3.fromRGB(255, 0, 255)
+		or Color3.fromRGB(0, 255, 255)
+	highlight.FillTransparency = 0.5
+	highlight.OutlineTransparency = 0.5
+	highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+	Board(target)
+	if target:IsA("MeshPart") then
+		target.Size = Vector3.new(15, 15, 15)
+	elseif target:IsA("Model") then
+		local part = target:FindFirstChildWhichIsA("BasePart") or target:FindFirstChildWhichIsA("MeshPart")
+		if part then
+			part.Size = Vector3.new(15, 15, 15)
+		else
+			warn("what the fuck is this egg model bro, ts pmo")
+		end
+	end
 end
 
 local function Highlight(v)
-    if table.find(SpecialEggs, v.Name) then
-        highlightEgg(v)
-        return
-    end
+	if table.find(SpecialEggs, v.Name) then
+		highlightEgg(v)
+		return
+	end
 
-    for prefix, range in pairs(NormalEggs) do
-        local num = tonumber(string.match(v.Name, "^" .. prefix .. "(%d+)$"))
-        if num and num >= range.min and num <= range.max then
-            highlightEgg(v)
-            return
-        end
-    end
+	for prefix, range in pairs(NormalEggs) do
+		local num = tonumber(string.match(v.Name, "^" .. prefix .. "(%d+)$"))
+		if num and num >= range.min and num <= range.max then
+			highlightEgg(v)
+			return
+		end
+	end
 end
- 
+
 for _, v in pairs(workspace:GetChildren()) do
-    Highlight(v)
+	Highlight(v)
 end
 
 workspace.ChildAdded:Connect(Highlight)
