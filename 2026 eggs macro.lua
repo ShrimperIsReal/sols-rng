@@ -45,7 +45,6 @@ local PRIORITY_SET = {
     hatch_egg          = true, royal_egg    = true, the_egg_of_the_sky = true,
 }
 
--- Always read/write through shared.toggled so external UIs stay in sync
 local function farmEnabled()  return shared.toggled == true end
 local function setFarm(v)     shared.toggled = v end
 local isWalking    = false
@@ -78,21 +77,17 @@ local function resolvePos(inst)
     end)
 end
 
--- Returns true if the waypoint position has a gap below it
--- (i.e. no solid ground within GAP_DEPTH_THRESHOLD studs beneath the waypoint)
 local function isGapBelow(position)
     local rayOrigin    = position + Vector3.new(0, 0.5, 0)
     local rayDirection = Vector3.new(0, -(GAP_DEPTH_THRESHOLD + 0.5), 0)
     local params       = RaycastParams.new()
     params.FilterType  = Enum.RaycastFilterType.Exclude
-    -- Exclude the local character so we don't self-hit
     local char = getChar()
     if char then params.FilterDescendantsInstances = { char } end
     local result = workspace:Raycast(rayOrigin, rayDirection, params)
-    return result == nil  -- no ground found within threshold = gap
+    return result == nil
 end
 
--- Checks the midpoint between two positions for a gap as well
 local function pathSegmentHasGap(fromPos, toPos)
     local mid = (fromPos + toPos) / 2
     return isGapBelow(toPos) or isGapBelow(mid)
@@ -112,7 +107,6 @@ local function makePathFolder(waypoints, eggColor)
             p.CanCollide = false
             p.CastShadow = false
             p.Material   = Enum.Material.Neon
-            -- Colour gap waypoints red so they're visible for debugging
             if isGapBelow(wp.Position) then
                 p.Color = GAP_COLOR
             elseif wp.Action == Enum.PathWaypointAction.Jump then
@@ -206,13 +200,11 @@ local function stepToWaypoint(hum, root, wp)
     return result
 end
 
--- Respawns the local character and waits until it's fully loaded back in
 local function respawnAndWait()
     local humanoid = getHum(getChar())
     if humanoid then
         humanoid.Health = 0
     end
-    -- Wait for the new character to appear and be ready
     task.wait(0.5)
     local timeout = 10
     local t0      = tick()
@@ -223,13 +215,11 @@ local function respawnAndWait()
         if c and hum and root and hum.Health > 0 then break end
         task.wait(0.2)
     end
-    task.wait(0.3) -- small grace period after spawn
+    task.wait(0.3)
 end
-
--- Re-scan the whole workspace for any eggs that might have been missed
 local function rescanWorkspace()
     for _, v in ipairs(workspace:GetChildren()) do
-        checkEgg(v)  -- forward declaration resolved below
+        checkEgg(v)
     end
 end
 
@@ -263,8 +253,6 @@ local function walkToEgg(targetInstance, eggColor)
                 pathBroken = true
                 break
             end
-
-            -- Gap check: if this waypoint or the segment leading to it is over a gap, abort the path
             local prevPos = (i > 1) and waypoints[i-1].Position or root.Position
             if pathSegmentHasGap(prevPos, wp.Position) then
                 warn("[EggBot] Gap detected near waypoint " .. i .. " – abandoning path attempt " .. attempt)
@@ -295,7 +283,6 @@ local function walkToEgg(targetInstance, eggColor)
         if not farmEnabled() then return "stopped" end
         if pathBroken then task.wait(0.1) continue end
 
-        -- Egg reached – fire proximity prompt
         local collected = false
         if isAlive(targetInstance) then
             for _, v in ipairs(targetInstance:GetDescendants()) do
@@ -310,9 +297,7 @@ local function walkToEgg(targetInstance, eggColor)
         task.wait(0.1)
 
         if collected then
-            -- Respawn character after collecting an egg
             respawnAndWait()
-            -- Re-scan workspace for any eggs that were missed
             rescanWorkspace()
         end
 
@@ -351,7 +336,6 @@ local function processQueue()
     end)
 end
 
--- Forward-declared above; defined here so walkToEgg can call it
 function checkEgg(v)
     task.spawn(function()
         if not v or not (v:IsA("Model") or v:IsA("BasePart")) then return end
