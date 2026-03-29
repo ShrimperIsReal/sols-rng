@@ -95,7 +95,6 @@ local REACH_DIST           = 4.5
 local WAYPOINT_TIMEOUT      = 2.5
 local STUCK_VEL_THRESHOLD  = 1.5
 local STUCK_CHECK_AFTER    = 0.8
-local JUMP_COOLDOWN        = 0.2
 local MAX_PATH_ATTEMPTS    = 5
 local WALK_HARD_TIMEOUT    = 90
 local GLOBAL_STUCK_TIMEOUT = 90
@@ -161,14 +160,24 @@ local function resolvePos(inst)
 end
  
 local function isGapBelow(position)
-    local rayOrigin    = position + Vector3.new(0, 0.5, 0)
-    local rayDirection = Vector3.new(0, -(GAP_DEPTH_THRESHOLD + 0.5), 0)
-    local params       = RaycastParams.new()
-    params.FilterType  = Enum.RaycastFilterType.Exclude
+    local rayDir = Vector3.new(0, -(GAP_DEPTH_THRESHOLD + 0.5), 0)
+    local params = RaycastParams.new()
+    params.FilterType = Enum.RaycastFilterType.Exclude
     local char = getChar()
     if char then params.FilterDescendantsInstances = { char } end
-    local result = workspace:Raycast(rayOrigin, rayDirection, params)
-    return result == nil
+
+    local offsets = {
+        Vector3.new(0, 0.5, 0),
+        Vector3.new(0.4, 0.5, 0),
+        Vector3.new(-0.4, 0.5, 0),
+        Vector3.new(0, 0.5, 0.4),
+        Vector3.new(0, 0.5, -0.4),
+    }
+    for _, offset in ipairs(offsets) do
+        local result = workspace:Raycast(position + offset, rayDir, params)
+        if result then return false end
+    end
+    return true
 end
  
 local function getGapInfo(fromPos, toPos)
@@ -202,6 +211,7 @@ local function makePathFolder(waypoints, eggColor)
             p.Anchored   = true
             p.CanCollide = false
             p.CastShadow = false
+            p.Transparency = shared.dev and 0 or 1
             p.Material   = Enum.Material.Neon
             local prevPos = (i > 1) and waypoints[i-1].Position or wp.Position
             local gapInfo = getGapInfo(prevPos, wp.Position)
@@ -282,6 +292,57 @@ local function respawnAndWait()
     task.wait(0.3)
 end
  
+local function findLadderNear(root)
+    local nearby = workspace:GetPartBoundsInBox(
+        CFrame.new(root.Position),
+        Vector3.new(4, 6, 4)
+    )
+    for _, part in ipairs(nearby) do
+        if part:IsA("BasePart")
+            and not part:IsA("TrussPart")
+            and string.find(part.Name:lower(), "ladder")
+        then
+            return part
+        end
+    end
+    return nil
+end
+
+local function climbLadder(hum, root, ladder)
+    local topY = ladder.Position.Y + ladder.Size.Y / 2 + 3
+    local topPos = Vector3.new(ladder.Position.X, topY, ladder.Position.Z)
+
+    local basePos = Vector3.new(ladder.Position.X, root.Position.Y, ladder.Position.Z)
+    hum:MoveTo(basePos)
+    task.wait(0.3)
+
+    local t0 = tick()
+    local lastY = root.Position.Y
+    local stuckT = tick()
+
+    while tick() - t0 < 10 do
+        task.wait(0.1)
+        local state = hum:GetState()
+
+        if root.Position.Y >= topY - 1.5 then
+            warn("[EggBot] Ladder climbed successfully")
+            return true
+        end
+
+        hum:MoveTo(topPos)
+
+        if root.Position.Y > lastY + 0.1 then
+            lastY = root.Position.Y
+            stuckT = tick()
+        elseif tick() - stuckT > 2 then
+            warn("[EggBot] Stuck on ladder – giving up climb")
+            return false
+        end
+    end
+
+    return false
+end
+
 local function stepToWaypoint(hum, root, wp, prevPos)
     if not hum or not root then return "fail" end
  
@@ -305,7 +366,6 @@ local function stepToWaypoint(hum, root, wp, prevPos)
  
     local result       = nil
     local startT       = tick()
-    local lastJumpTime = 0
     local lastPos      = root.Position
     local lastPosTime  = tick()
     local PROGRESS_CHECK_INTERVAL = 0.6
@@ -349,7 +409,19 @@ local function stepToWaypoint(hum, root, wp, prevPos)
                 local lookAheadPos = root.Position + (wp.Position - root.Position).Unit * 3
                 local surpriseGap  = getGapInfo(root.Position, lookAheadPos)
  
-                if surpriseGap and surpriseGap ~= false then
+                local ladder = findLadderNear(root)
+                if ladder then
+                    warn("[EggBot] Ladder detected - attempting climb")
+                    moveConn:Disconnect()
+                    local climbed = climbLadder(hum, root, ladder)
+                    if climbed then
+                        stuckCheckCount = 0
+                        result = "reached"
+                    else
+                        result = "timeout"
+                    end
+                    break
+                elseif surpriseGap and surpriseGap ~= false then
                     local success = doGapJump(hum, root, wp.Position)
                     if success then
                         stuckCheckCount = 0
@@ -358,21 +430,16 @@ local function stepToWaypoint(hum, root, wp, prevPos)
                     end
                 else
                     local awayDir = (root.Position - wp.Position).Unit
-                    local ceilingRay = workspace:Raycast(
-                        root.Position,
-                        Vector3.new(0, 3.5, 0),
-                        RaycastParams.new()
-                    )
-                    if ceilingRay then
-                        local backTarget = root.Position + Vector3.new(awayDir.X * 3, 0, awayDir.Z * 3)
-                        hum:MoveTo(backTarget)
-                        task.wait(0.4)
-                        hum:MoveTo(wp.Position)
-                    elseif (now - lastJumpTime) > JUMP_COOLDOWN then
-                        lastJumpTime = now
-                        doJump(hum)
-                        hum:MoveTo(wp.Position)
-                    end
+                    local backTarget = root.Position + Vector3.new(awayDir.X * 3, 0, awayDir.Z * 3)
+                    
+                    hum:MoveTo(backTarget)
+                    task.wait(0.4)
+                    
+                    doJump(hum)
+                    task.wait(0.05)
+                    
+                    hum:MoveTo(wp.Position)
+                    warn("[EggBot] Resuming path with Forced Jump")
                 end
             else
                 stuckCheckCount = 0
@@ -393,62 +460,88 @@ local function rescanWorkspace()
     end
 end
  
+local function pathHasGap(waypoints)
+    for i = 2, #waypoints do
+        local prevPos = waypoints[i-1].Position
+        local curPos  = waypoints[i].Position
+        if getGapInfo(prevPos, curPos) ~= nil then
+            return true
+        end
+    end
+    return false
+end
+
+local function computeSafePath(fromPos, toPos, extraRadius)
+    local params = {
+        AgentHeight     = PATH_PARAMS.AgentHeight,
+        AgentRadius     = PATH_PARAMS.AgentRadius + (extraRadius or 0),
+        AgentCanJump    = PATH_PARAMS.AgentCanJump,
+        AgentJumpHeight = PATH_PARAMS.AgentJumpHeight,
+        WaypointSpacing = PATH_PARAMS.WaypointSpacing,
+    }
+    local path = PathfindingService:CreatePath(params)
+    local ok = pcall(function() path:ComputeAsync(fromPos, toPos) end)
+    if not ok or path.Status ~= Enum.PathStatus.Success then return nil end
+    return path
+end
+
 local function walkToEgg(targetInstance, eggColor)
     local char = getChar()
     local hum = getHum(char)
     local root = getRoot(char)
- 
+
     if not hum or not root then return "fail" end
- 
+
     for attempt = 1, MAX_PATH_ATTEMPTS do
         if not farmEnabled() then return "stopped" end
- 
+
         local targetPos = resolvePos(targetInstance)
         if not targetPos then return "done" end
- 
-        local path = PathfindingService:CreatePath(PATH_PARAMS)
-        local ok = pcall(function() path:ComputeAsync(root.Position, targetPos) end)
- 
-        if not ok or path.Status ~= Enum.PathStatus.Success then
+
+        local waypoints = nil
+        for _, extraRadius in ipairs({0, 2, 4, 6, 8}) do
+            local candidate = computeSafePath(root.Position, targetPos, extraRadius)
+            if candidate then
+                local wps = candidate:GetWaypoints()
+                if not pathHasGap(wps) then
+                    waypoints = wps
+                    if extraRadius > 0 then
+                        warn("[EggBot] Gap-free path found with radius +" .. extraRadius)
+                    end
+                    break
+                end
+            end
+        end
+
+        if not waypoints then
+            warn("[EggBot] No gap-free path found on attempt " .. attempt .. " - retrying")
             task.wait(0.2)
             continue
         end
- 
-        local waypoints   = path:GetWaypoints()
+
         local pathFolder, cleanup = makePathFolder(waypoints, eggColor)
-        local pathBroken  = false
- 
+        local pathBroken = false
+
         for i, wp in ipairs(waypoints) do
             if not farmEnabled() or not isAlive(targetInstance) then
                 pathBroken = true
                 break
             end
- 
+
             local prevPos = (i > 1) and waypoints[i-1].Position or root.Position
- 
-            local needsJump = wp.Action == Enum.PathWaypointAction.Jump
-            if not needsJump and i < #waypoints then
-                if (waypoints[i+1].Position.Y - wp.Position.Y) > 1.2 then
-                    needsJump = true
-                end
-            end
- 
-            if needsJump then
+
+            if wp.Action == Enum.PathWaypointAction.Jump then
                 doJump(hum)
             end
- 
+
             local stepResult = stepToWaypoint(hum, root, wp, prevPos)
- 
+
             if stepResult == "stuck_reset" then
-                warn("[EggBot] Respawned mid-path – re-queuing egg")
+                warn("[EggBot] Respawned mid-path - re-queuing egg")
                 pathBroken = true
                 break
-            elseif stepResult == "gaptoowide" then
-                warn("[EggBot] Gap too wide at waypoint " .. i .. " – abandoning attempt " .. attempt)
-                pathBroken = true
-                break
-            elseif stepResult == "gapfail" then
-                warn("[EggBot] Gap jump failed at waypoint " .. i .. " – retrying path")
+            elseif stepResult == "gaptoowide" or stepResult == "gapfail" then
+                warn("[EggBot] Unexpected gap mid-walk at waypoint " .. i .. " - recomputing")
                 pathBroken = true
                 break
             elseif stepResult ~= "reached" then
@@ -456,11 +549,11 @@ local function walkToEgg(targetInstance, eggColor)
                 break
             end
         end
- 
+
         cleanup()
         if not farmEnabled() then return "stopped" end
         if pathBroken then task.wait(0.1) continue end
- 
+
         local collected = false
         if isAlive(targetInstance) then
             for _, v in ipairs(targetInstance:GetDescendants()) do
@@ -471,14 +564,13 @@ local function walkToEgg(targetInstance, eggColor)
                 end
             end
         end
- 
+
         task.wait(0.1)
- 
+
         if collected then
-            respawnAndWait()
             rescanWorkspace()
         end
- 
+
         return "done"
     end
     return "fail"
@@ -505,6 +597,8 @@ local function processQueue()
         if data and queuedIds[data.id] then
             queuedIds[data.id] = nil
             if isAlive(data.target) and farmEnabled() then
+                warn("[EggBot] Resetting before next egg: " .. data.id)
+                respawnAndWait()
                 walkToEgg(data.target, data.color)
             end
         end
@@ -566,4 +660,4 @@ player.Chatted:Connect(function(msg)
 end)
  
 workspace.ChildAdded:Connect(checkEgg)
-print("[EggBot] Bot Loaded - V1.7.1 (Stuck Reset)!")
+print("[EggBot] Bot Loaded - v2.0.0")
