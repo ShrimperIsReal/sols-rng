@@ -173,13 +173,10 @@ task.spawn(function()
     end
 end)
 
--- Returns true if EggType is in the Notify table (handles both multi-select formats)
 local function IsNotified(EggType)
     local n = SomethingSomething.WebHook.Notify
     if type(n) == "table" then
-        -- multi-select returns {["Point Eggs"] = true, ...}
         if n[EggType] then return true end
-        -- fallback: array format
         for _, v in ipairs(n) do
             if v == EggType then return true end
         end
@@ -252,7 +249,7 @@ local function SendEggCollectedWebhook(egg, EggType)
     end
 end
 
-local ScanAndQueueExistingEggs -- forward declare
+local ScanAndQueueExistingEggs
 
 local function ProcessQueue()
     if MacroRunning then return end
@@ -260,7 +257,7 @@ local function ProcessQueue()
     task.spawn(function()
         while #MacroQueue > 0 and SomethingSomething.Macro.Enabled do
             LP.DevComputerMovementMode = Enum.DevComputerMovementMode.Scriptable
-            local egg = table.remove(MacroQueue, 1) -- this line
+            local egg = table.remove(MacroQueue, 1)
             if egg and egg.Parent then
                 local done = false
 
@@ -285,11 +282,8 @@ local function ProcessQueue()
                     continue
                 end
 
-                -- Wait up to 60 seconds
                 local elapsed = 0
                 while not done and elapsed < 60 do
-                    pcall(e.Stop, e)
-                    e:Run(runto)
                     task.wait(0.5)
                     elapsed += 0.5
                 end
@@ -299,8 +293,6 @@ local function ProcessQueue()
                 if not done then
                     warn("[Shrimp] Timeout on egg: " .. tostring(egg.Name) .. " — resetting character")
                     pcall(e.Stop, e)
-                    MacroRunning = false
-                    ScanAndQueueExistingEggs()
                     return
                 end
 
@@ -315,7 +307,6 @@ local function ProcessQueue()
                 end)
                 if not ok2 then warn("[Shrimp] Collect error: " .. tostring(err2)) end
 
-                -- Webhook
                 local EggType = GetEggType(egg)
                 task.delay(0.5, function()
                     SendEggCollectedWebhook(egg, EggType)
@@ -377,11 +368,9 @@ Workspace.ChildAdded:Connect(function(v)
     end
 end)
 
--- UI --
-
 local Window = Library:CreateWindow({
     Title = "Shrimp's Stuff",
-    Footer = "sol's rng - v3.0.0 - " .. LP.Name,
+    Footer = "sol's rng - femboys - v2.1.0 - " .. LP.Name,
     Icon = 6171138225,
     NotifySide = "Left",
     ShowCustomCursor = true,
@@ -392,8 +381,6 @@ local Tabs = {
     Webhook = Window:AddTab("Webhook", "user"),
     ["UI Settings"] = Window:AddTab("UI Settings", "settings"),
 }
-
--- MAIN --
 
 local Macro = Tabs.Main:AddLeftGroupbox("Macro", "boxes")
 
@@ -444,8 +431,6 @@ ESP:AddDropdown("WhatToESP", {
     end,
 })
 
--- WEBHOOK --
-
 local WebhookTab = Tabs.Webhook:AddLeftGroupbox("Discord (no way bro)", "boxes")
 
 WebhookTab:AddInput("WebhookURL", {
@@ -490,9 +475,12 @@ WebhookTab:AddToggle("AuraEggNotify", {
 
 Library:OnUnload(function()
     e:Stop()
+
+    for _,v in Workspace:GetDescendants() do
+        if v.Name == "esp" then v:Destroy() end
+    end
 end)
 
--- UI Settings
 local MenuGroup = Tabs["UI Settings"]:AddLeftGroupbox("Menu", "wrench")
 
 MenuGroup:AddToggle("KeybindMenuOpen", {
