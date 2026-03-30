@@ -1,7 +1,17 @@
 local Workspace = game:GetService("Workspace")
 local HttpService = game:GetService("HttpService")
+local VirtualUser = game:GetService("VirtualUser")
 
 local LP = game:GetService("Players").LocalPlayer
+local Camera = Workspace.CurrentCamera
+
+local idled = LP.Idled:Connect(function()
+	VirtualUser:Button2Down(Vector2.new(0, 0), Camera.CFrame)
+	task.wait()
+	VirtualUser:Button2Up(Vector2.new(0, 0), Camera.CFrame)
+end)
+
+
 
 local defaults = {
     Macro = {
@@ -475,7 +485,7 @@ WebhookTab:AddToggle("AuraEggNotify", {
 
 Library:OnUnload(function()
     e:Stop()
-
+    idled:Disconnect()
     for _,v in Workspace:GetDescendants() do
         if v.Name == "esp" then v:Destroy() end
     end
